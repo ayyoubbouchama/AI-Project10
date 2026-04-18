@@ -88,5 +88,202 @@ def tournament_select(population, scores, k=TOURNAMENT_SIZE):
     candidates = random.sample(range(len(population)), k)
     best = max(candidates, key=lambda i: scores[i])
     return population[best][:]   # return a copy
+
+
+# ─────────────────────────── crossover ────────────────────────────
+
+def order_crossover(parent1, parent2):
+    """
+    Order Crossover (OX1) — the standard crossover for permutation
+    representations (used in TSP, bin packing, scheduling, etc.).
+
+    How it works:
+    1. Pick two random cut points to define a segment in parent1.
+    2. Copy that segment directly into the child at the same positions.
+    3. Fill the remaining positions with the genes from parent2,
+       in the order they appear, skipping any gene already in the child.
+
+    This preserves the *relative order* of genes from parent2 while
+    keeping an *absolute sub-sequence* from parent1.
+
+    Returns two children (symmetric: roles of parents swap for child2).
+    """
+    size = len(parent1)
+    # Choose two distinct cut points and sort them
+    cx1, cx2 = sorted(random.sample(range(size), 2))
+
+    def _build_child(p1, p2):
+        child = [None] * size
+        # Step 1 — copy the segment from p1
+        child[cx1:cx2 + 1] = p1[cx1:cx2 + 1]
+        segment_set = set(child[cx1:cx2 + 1])
+
+        # Step 2 — fill remaining slots from p2, preserving p2's order
+        fill_values = [g for g in p2 if g not in segment_set]
+        fill_idx = 0
+        for i in range(size):
+            if child[i] is None:
+                child[i] = fill_values[fill_idx]
+                fill_idx += 1
+        return child
+
+    child1 = _build_child(parent1, parent2)
+    child2 = _build_child(parent2, parent1)
+    return child1, child2
+
+
+# ─────────────────────────── mutation ─────────────────────────────
+
+def swap_mutation(chromosome):
+    """
+    Swap Mutation: pick two random positions and swap their genes.
+
+    Minimal disruption — changes only two elements. Good for fine-tuning
+    an already-decent solution.
+    """
+    a, b = random.sample(range(len(chromosome)), 2)
+    chromosome[a], chromosome[b] = chromosome[b], chromosome[a]
+    return chromosome
+
+
+def inversion_mutation(chromosome):
+    """
+    Inversion Mutation: pick a random sub-sequence and reverse it.
+
+    More disruptive than a swap — can rearrange several elements at
+    once, which helps escape local optima. The combination of swap +
+    inversion gives the GA a balance of exploitation vs. exploration.
+    """
+    a, b = sorted(random.sample(range(len(chromosome)), 2))
+    chromosome[a:b + 1] = chromosome[a:b + 1][::-1]
+    return chromosome
+
+
+def mutate(chromosome):
+    """
+    Apply mutation operators with independent probabilities.
+
+    Each operator is applied independently, so a chromosome may receive
+    no mutation, one mutation, or both in the same generation.
+    """
+    if random.random() < MUTATION_SWAP:
+        chromosome = swap_mutation(chromosome)
+    if random.random() < MUTATION_INVERT:
+        chromosome = inversion_mutation(chromosome)
+    return chromosome
+
+
+# ─────────────────────────── main GA loop ─────────────────────────
+
+def solve(boxes, container, verbose=True):
+    """
+    Run the full Genetic Algorithm and return the best packing found.
+
+    Parameters
+    ----------
+    boxes : list[Box]
+        All boxes to attempt to pack.
+    container : Container
+        The shipping container.
+    verbose : bool
+        If True, print progress every 10 generations.
+
+    Returns
+    -------
+    dict with keys:
+        "positions"   – list of placement dicts (the packing plan)
+        "utilization" – best volume utilization in %
+        "fitness"     – best fitness score
+        "generation"  – generation in which the best was found
+    """
+    n = len(boxes)
+
+    # ── 1. Initialize population ──────────────────────────────────
+    population = [random_chromosome(n) for _ in range(POPULATION_SIZE)]
+
+    # Evaluate the initial population
+    eval_results = [fitness(ch, boxes, container) for ch in population]
+    scores       = [r[0] for r in eval_results]
+    all_positions = [r[1] for r in eval_results]
+    all_utils     = [r[2] for r in eval_results]
+
+    # Track the global best
+    best_idx   = max(range(POPULATION_SIZE), key=lambda i: scores[i])
+    best_score = scores[best_idx]
+    best_positions = all_positions[best_idx]
+    best_util  = all_utils[best_idx]
+    best_gen   = 0
+
+    if verbose:
+        print(f"[GA] gen   0 | best fitness {best_score:7.2f}% "
+              f"| utilization {best_util:5.1f}% "
+              f"| placed {len(best_positions)}/{n}")
+
+    # ── 2. Evolve ─────────────────────────────────────────────────
+    for gen in range(1, NUM_GENERATIONS + 1):
+
+        # Sort current population by score (descending) for elitism
+        ranked = sorted(range(POPULATION_SIZE),
+                        key=lambda i: scores[i], reverse=True)
+
+        new_population = []
+
+        # 2a. Elitism — carry over the top ELITE_COUNT unchanged
+        for i in range(ELITE_COUNT):
+            new_population.append(population[ranked[i]][:])
+
+        # 2b. Fill the rest with crossover + mutation
+        while len(new_population) < POPULATION_SIZE:
+            parent1 = tournament_select(population, scores)
+            parent2 = tournament_select(population, scores)
+
+            # Crossover
+            if random.random() < CROSSOVER_RATE:
+                child1, child2 = order_crossover(parent1, parent2)
+            else:
+                child1, child2 = parent1[:], parent2[:]
+
+            # Mutation
+            child1 = mutate(child1)
+            child2 = mutate(child2)
+
+            new_population.append(child1)
+            if len(new_population) < POPULATION_SIZE:
+                new_population.append(child2)
+
+        population = new_population
+
+        # 2c. Evaluate the new generation
+        eval_results  = [fitness(ch, boxes, container) for ch in population]
+        scores        = [r[0] for r in eval_results]
+        all_positions = [r[1] for r in eval_results]
+        all_utils     = [r[2] for r in eval_results]
+
+        # Update global best
+        gen_best_idx = max(range(POPULATION_SIZE), key=lambda i: scores[i])
+        if scores[gen_best_idx] > best_score:
+            best_score     = scores[gen_best_idx]
+            best_positions = all_positions[gen_best_idx]
+            best_util      = all_utils[gen_best_idx]
+            best_gen       = gen
+
+        if verbose and (gen % 10 == 0 or gen == NUM_GENERATIONS):
+            print(f"[GA] gen {gen:3d} | best fitness {best_score:7.2f}% "
+                  f"| utilization {best_util:5.1f}% "
+                  f"| placed {len(best_positions)}/{n}")
+
+    # ── 3. Return results ─────────────────────────────────────────
+    if verbose:
+        print(f"\n[GA] ✓ Done — best found at generation {best_gen}")
+        print(f"[GA]   fitness    = {best_score:.2f}")
+        print(f"[GA]   utilization = {best_util:.1f}%")
+        print(f"[GA]   placed     = {len(best_positions)}/{n} boxes")
+
+    return {
+        "positions":   best_positions,
+        "utilization": best_util,
+        "fitness":     best_score,
+        "generation":  best_gen,
+    }
  
  
