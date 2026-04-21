@@ -175,7 +175,7 @@ def mutate(chromosome):
 
 # ─────────────────────────── main GA loop ─────────────────────────
 
-def solve(boxes, container, verbose=True):
+def solve(boxes, container):
     """
     Run the full Genetic Algorithm and return the best packing found.
 
@@ -185,8 +185,6 @@ def solve(boxes, container, verbose=True):
         All boxes to attempt to pack.
     container : Container
         The shipping container.
-    verbose : bool
-        If True, print progress every 10 generations.
 
     Returns
     -------
@@ -214,10 +212,7 @@ def solve(boxes, container, verbose=True):
     best_util  = all_utils[best_idx]
     best_gen   = 0
 
-    if verbose:
-        print(f"[GA] gen   0 | best fitness {best_score:7.2f}% "
-              f"| utilization {best_util:5.1f}% "
-              f"| placed {len(best_positions)}/{n}")
+
 
     # ── 2. Evolve ─────────────────────────────────────────────────
     for gen in range(1, NUM_GENERATIONS + 1):
@@ -267,17 +262,10 @@ def solve(boxes, container, verbose=True):
             best_util      = all_utils[gen_best_idx]
             best_gen       = gen
 
-        if verbose and (gen % 10 == 0 or gen == NUM_GENERATIONS):
-            print(f"[GA] gen {gen:3d} | best fitness {best_score:7.2f}% "
-                  f"| utilization {best_util:5.1f}% "
-                  f"| placed {len(best_positions)}/{n}")
+
 
     # ── 3. Return results ─────────────────────────────────────────
-    if verbose:
-        print(f"\n[GA] ✓ Done — best found at generation {best_gen}")
-        print(f"[GA]   fitness    = {best_score:.2f}")
-        print(f"[GA]   utilization = {best_util:.1f}%")
-        print(f"[GA]   placed     = {len(best_positions)}/{n} boxes")
+
 
     return {
         "positions":   best_positions,
