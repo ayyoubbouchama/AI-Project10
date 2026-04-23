@@ -2,8 +2,7 @@
 # Project 10 - 3D Container Loading Optimizer
 # Algorithm: Greedy Best-Fit Decreasing (BFD) + Bottom-Left-Fill (BLF)
 # ==============================================================================
-import Box from ../core/models.py
-import Container from ../core/models.py
+from core.models import Box, Container
 def solve(boxes, container):
     positions = []
 
