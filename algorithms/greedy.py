@@ -61,9 +61,9 @@ def solve(boxes, container):
                 "h": box.h
             })
 
-    total_box_volume = sum(b.l * b.w * b.h for b in boxes)
+    placed_volume = sum(p["l"] * p["w"] * p["h"] for p in positions)
     container_volume = container.L * container.W * container.H
-    utilization = (total_box_volume / container_volume) * 100
+    utilization = (placed_volume / container_volume) * 100
 
     return {
         "positions": positions,
