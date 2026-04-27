@@ -236,7 +236,7 @@ def mutate(chromosome, mutation_swap_rate, mutation_inv_rate):
 
 # ─────────────────────────── main GA loop ─────────────────────────
 
-def solve(boxes, container, verbose=True):
+def solve(boxes, container):
     """
     Run the full Genetic Algorithm and return the best packing found.
 
@@ -246,8 +246,6 @@ def solve(boxes, container, verbose=True):
         All boxes to attempt to pack.
     container : Container
         The shipping container.
-    verbose : bool
-        If True, print progress every 10 generations.
 
     Returns
     -------
@@ -295,10 +293,7 @@ def solve(boxes, container, verbose=True):
     mutation_inv_rate  = MUTATION_INV_BASE
     gens_since_improvement = 0
 
-    if verbose:
-        print(f"[GA] gen   0 | best fitness {best_score:7.2f}% "
-              f"| utilization {best_util:5.1f}% "
-              f"| placed {len(best_positions)}/{n}")
+
 
     # ── 2. Evolve ─────────────────────────────────────────────────
     for gen in range(1, NUM_GENERATIONS + 1):
@@ -358,9 +353,7 @@ def solve(boxes, container, verbose=True):
         if gens_since_improvement > 0 and gens_since_improvement % 10 == 0:
             mutation_swap_rate = min(mutation_swap_rate * 1.5, 0.50)
             mutation_inv_rate  = min(mutation_inv_rate * 1.5, 0.40)
-            if verbose:
-                print(f"[GA]   ^ mutation rates: swap={mutation_swap_rate:.2f}, "
-                      f"inv={mutation_inv_rate:.2f}")
+
 
         # 2e. Stagnation immigration: replace bottom 20% with fresh individuals
         if gens_since_improvement == STAGNATION_LIMIT:
@@ -373,28 +366,16 @@ def solve(boxes, container, verbose=True):
                 scores[replace_idx] = s
                 all_positions[replace_idx] = p
                 all_utils[replace_idx] = u
-            if verbose:
-                print(f"[GA]   >> Immigration: replaced {num_immigrants} "
-                      f"weakest individuals")
+
 
         # 2f. Early stopping
         if gens_since_improvement >= EARLY_STOP_GENS:
-            if verbose:
-                print(f"[GA]   >> Early stop at gen {gen} "
-                      f"(no improvement for {EARLY_STOP_GENS} gens)")
             break
 
-        if verbose and (gen % 10 == 0 or gen == NUM_GENERATIONS):
-            print(f"[GA] gen {gen:3d} | best fitness {best_score:7.2f}% "
-                  f"| utilization {best_util:5.1f}% "
-                  f"| placed {len(best_positions)}/{n}")
+
 
     # ── 3. Return results ─────────────────────────────────────────
-    if verbose:
-        print(f"\n[GA] Done - best found at generation {best_gen}")
-        print(f"[GA]   fitness    = {best_score:.2f}")
-        print(f"[GA]   utilization = {best_util:.1f}%")
-        print(f"[GA]   placed     = {len(best_positions)}/{n} boxes")
+
 
     return {
         "positions":   best_positions,
