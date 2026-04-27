@@ -71,27 +71,3 @@ def solve(boxes, container):
     }
 
 
-if __name__ == "__main__":
-    container = Container(L=10, W=10, H=10)
-
-    boxes = [
-        Box(id=0, l=3, w=3, h=3, weight=5),
-        Box(id=1, l=4, w=4, h=2, weight=3),
-        Box(id=2, l=2, w=5, h=3, weight=2),
-        Box(id=3, l=5, w=2, h=2, weight=4),
-        Box(id=4, l=3, w=3, h=4, weight=1),
-        Box(id=5, l=2, w=2, h=2, weight=2),
-        Box(id=6, l=4, w=3, h=2, weight=3),
-        Box(id=7, l=1, w=5, h=3, weight=1),
-        Box(id=8, l=3, w=2, h=4, weight=2),
-        Box(id=9, l=2, w=4, h=3, weight=1),
-    ]
-
-    result = solve(boxes, container)
-
-    print(f"Utilization : {result['utilization']:.2f}%")
-    print(f"Boxes packed: {len(result['positions'])} / {len(boxes)}")
-    print()
-    for p in result["positions"]:
-        print(f"  Box {p['id']:2d}  pos=({p['x']:2d}, {p['y']:2d}, {p['z']:2d})  "
-              f"dims=({p['l']}×{p['w']}×{p['h']})")
