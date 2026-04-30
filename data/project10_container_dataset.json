@@ -1,0 +1,218 @@
+{
+  "metadata": {
+    "project": "Project 10 - 3D Container Loading Optimizer",
+    "course": "Introduction to AI - Spring 2025-2026",
+    "description": "Synthetic dataset of boxes and a standard ISO 20ft shipping container for the 3D Bin Packing Problem (3D-BPP).",
+    "units": {
+      "dimensions": "centimeters (cm)",
+      "weight": "kilograms (kg)",
+      "volume": "cubic centimeters (cm\u00b3)"
+    },
+    "notes": [
+      "Fragile boxes cannot be rotated upside-down (orientation_locked: true means keep upright).",
+      "Heavy boxes should be placed at the bottom (stability constraint).",
+      "All boxes must be fully inside container boundaries with no overlaps.",
+      "Every box must be supported by the floor or another box (gravity constraint)."
+    ]
+  },
+  "container": {
+    "id": "ISO_20FT_STANDARD",
+    "type": "ISO 20-foot Dry Freight Container",
+    "inner_dimensions": {
+      "length_cm": 589,
+      "width_cm": 234,
+      "height_cm": 239
+    },
+    "max_payload_kg": 21770,
+    "inner_volume_cm3": 32940414,
+    "notes": "Standard ISO 20ft container. Inner dimensions account for wall thickness."
+  },
+  "box_types": [
+    {
+      "id": "BOX_001",
+      "label": "Large Appliance Box",
+      "length_cm": 80,
+      "width_cm": 60,
+      "height_cm": 70,
+      "weight_kg": 35.0,
+      "quantity": 19,
+      "fragile": false,
+      "orientation_locked": false,
+      "category": "Electronics",
+      "color_hint": "#E74C3C"
+    },
+    {
+      "id": "BOX_002",
+      "label": "Medium Furniture Flat Pack",
+      "length_cm": 120,
+      "width_cm": 60,
+      "height_cm": 15,
+      "weight_kg": 22.5,
+      "quantity": 24,
+      "fragile": false,
+      "orientation_locked": false,
+      "category": "Furniture",
+      "color_hint": "#3498DB"
+    },
+    {
+      "id": "BOX_003",
+      "label": "Small Fragile Box (Glassware)",
+      "length_cm": 30,
+      "width_cm": 30,
+      "height_cm": 30,
+      "weight_kg": 5.0,
+      "quantity": 48,
+      "fragile": true,
+      "orientation_locked": true,
+      "category": "Glassware",
+      "color_hint": "#9B59B6"
+    },
+    {
+      "id": "BOX_004",
+      "label": "Standard Cardboard Box (Books)",
+      "length_cm": 40,
+      "width_cm": 30,
+      "height_cm": 30,
+      "weight_kg": 18.0,
+      "quantity": 60,
+      "fragile": false,
+      "orientation_locked": false,
+      "category": "Books",
+      "color_hint": "#F39C12"
+    },
+    {
+      "id": "BOX_005",
+      "label": "Long Tube Box (Posters/Pipes)",
+      "length_cm": 150,
+      "width_cm": 20,
+      "height_cm": 20,
+      "weight_kg": 4.5,
+      "quantity": 14,
+      "fragile": false,
+      "orientation_locked": false,
+      "category": "Miscellaneous",
+      "color_hint": "#1ABC9C"
+    },
+    {
+      "id": "BOX_006",
+      "label": "Heavy Machinery Part",
+      "length_cm": 50,
+      "width_cm": 50,
+      "height_cm": 50,
+      "weight_kg": 80.0,
+      "quantity": 10,
+      "fragile": false,
+      "orientation_locked": false,
+      "category": "Industrial",
+      "color_hint": "#7F8C8D"
+    },
+    {
+      "id": "BOX_007",
+      "label": "Clothing/Textile Bale",
+      "length_cm": 70,
+      "width_cm": 50,
+      "height_cm": 40,
+      "weight_kg": 12.0,
+      "quantity": 36,
+      "fragile": false,
+      "orientation_locked": false,
+      "category": "Textiles",
+      "color_hint": "#E67E22"
+    },
+    {
+      "id": "BOX_008",
+      "label": "Electronics Component Box",
+      "length_cm": 45,
+      "width_cm": 35,
+      "height_cm": 25,
+      "weight_kg": 8.0,
+      "quantity": 43,
+      "fragile": true,
+      "orientation_locked": true,
+      "category": "Electronics",
+      "color_hint": "#2ECC71"
+    },
+    {
+      "id": "BOX_009",
+      "label": "Wide Flat Box (Mirrors/Artwork)",
+      "length_cm": 100,
+      "width_cm": 80,
+      "height_cm": 10,
+      "weight_kg": 9.0,
+      "quantity": 12,
+      "fragile": true,
+      "orientation_locked": true,
+      "category": "Artwork",
+      "color_hint": "#C0392B"
+    },
+    {
+      "id": "BOX_010",
+      "label": "Small Dense Box (Metal Parts)",
+      "length_cm": 25,
+      "width_cm": 25,
+      "height_cm": 25,
+      "weight_kg": 30.0,
+      "quantity": 29,
+      "fragile": false,
+      "orientation_locked": false,
+      "category": "Industrial",
+      "color_hint": "#34495E"
+    },
+    {
+      "id": "BOX_011",
+      "label": "Tall Narrow Box (Lamps/Poles)",
+      "length_cm": 20,
+      "width_cm": 20,
+      "height_cm": 120,
+      "weight_kg": 6.5,
+      "quantity": 19,
+      "fragile": true,
+      "orientation_locked": true,
+      "category": "Furniture",
+      "color_hint": "#8E44AD"
+    },
+    {
+      "id": "BOX_012",
+      "label": "Cube Box (Packaged Food/Cans)",
+      "length_cm": 35,
+      "width_cm": 35,
+      "height_cm": 35,
+      "weight_kg": 20.0,
+      "quantity": 72,
+      "fragile": false,
+      "orientation_locked": false,
+      "category": "Food",
+      "color_hint": "#D35400"
+    }
+  ],
+  "summary": {
+    "total_box_types": 12,
+    "total_box_count": 386,
+    "total_cargo_weight_kg": 6705.5,
+    "total_cargo_volume_cm3": 26667250,
+    "theoretical_volume_utilization_pct": 80.96,
+    "note": "Theoretical utilization assumes perfect packing with no gaps. Actual achieved utilization will be lower due to geometric constraints. Target for the optimizer is 75-80%+ actual utilization."
+  },
+  "algorithm_hints": {
+    "greedy_bfd": {
+      "strategy": "Best-Fit Decreasing",
+      "sort_by": "volume_descending",
+      "description": "Sort boxes by volume largest-first. Place each box at the first valid position (Deepest Bottom-Left Fill)."
+    },
+    "genetic_algorithm": {
+      "chromosome": "permutation of all 386 box instances (by box_id repeated by quantity)",
+      "decoder": "Apply DBLF heuristic to the permutation order",
+      "fitness": "total volume packed / container volume",
+      "mutation": "swap two random positions in the permutation",
+      "crossover": "Order Crossover (OX1)"
+    },
+    "simulated_annealing": {
+      "perturbation": "swap two box positions in the packing sequence",
+      "objective": "maximize volume utilization",
+      "initial_temperature": 1000,
+      "cooling_rate": 0.995
+    },
+    "stability_rule": "Sort heavy boxes first (weight_kg descending) to place them at the bottom layer.",
+    "fragile_rule": "orientation_locked=true boxes must never be rotated so their top face becomes a bottom face."
+  }
+}
