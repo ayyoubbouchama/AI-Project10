@@ -1,10 +1,12 @@
 class Box:
-    def __init__(self, id, l, w, h, weight=1):
+    def __init__(self, id, l, w, h, weight=1, fragile=False, orientation_locked=False):
         self.id = id
         self.l = l
         self.w = w
         self.h = h
         self.weight = weight
+        self.fragile = fragile
+        self.orientation_locked = orientation_locked
 
     def volume(self):
         return self.l * self.w * self.h

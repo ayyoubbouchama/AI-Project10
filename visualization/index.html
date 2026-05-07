@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description"
+        content="3D Bin Packing Logistics Tool — Optimize container loading with Genetic Algorithms, Greedy, and Simulated Annealing." />
+    <title>PackOptima — 3D Container Loading Optimizer</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet" />
+
+    <!-- Three.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+    <!-- ═══════════════════ HEADER ═══════════════════ -->
+    <header id="app-header">
+        <div class="header-brand">
+            <div class="logo-icon">
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                    <rect x="2" y="8" width="12" height="12" rx="2" stroke="url(#grad1)" stroke-width="2" fill="none" />
+                    <rect x="14" y="4" width="10" height="10" rx="2" stroke="url(#grad2)" stroke-width="2"
+                        fill="none" />
+                    <rect x="10" y="16" width="8" height="8" rx="1.5" stroke="url(#grad3)" stroke-width="2"
+                        fill="none" />
+                    <defs>
+                        <linearGradient id="grad1" x1="0" y1="0" x2="1" y2="1">
+                            <stop stop-color="#06b6d4" />
+                            <stop offset="1" stop-color="#8b5cf6" />
+                        </linearGradient>
+                        <linearGradient id="grad2" x1="0" y1="0" x2="1" y2="1">
+                            <stop stop-color="#8b5cf6" />
+                            <stop offset="1" stop-color="#ec4899" />
+                        </linearGradient>
+                        <linearGradient id="grad3" x1="0" y1="0" x2="1" y2="1">
+                            <stop stop-color="#06b6d4" />
+                            <stop offset="1" stop-color="#10b981" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <h1>Pack<span class="accent">Optima</span></h1>
+            <span class="header-tag">3D Container Loading Optimizer</span>
+        </div>
+        <div class="header-actions">
+            <button id="btn-theme-toggle" class="icon-btn" title="Toggle theme">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- ═══════════════════ MAIN LAYOUT ═══════════════════ -->
+    <main id="app-main">
+        <!-- ─── LEFT PANEL: INPUTS ─── -->
+        <aside id="panel-left" class="panel">
+            <div class="panel-section">
+                <h2 class="section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="2" width="20" height="20" rx="3" />
+                        <path d="M2 10h20M10 2v20" />
+                    </svg>
+                    Container
+                </h2>
+                <div class="input-grid-3">
+                    <div class="input-group">
+                        <label for="container-l">L (cm)</label>
+                        <input type="number" id="container-l" value="590" min="1" />
+                    </div>
+                    <div class="input-group">
+                        <label for="container-w">W (cm)</label>
+                        <input type="number" id="container-w" value="235" min="1" />
+                    </div>
+                    <div class="input-group">
+                        <label for="container-h">H (cm)</label>
+                        <input type="number" id="container-h" value="239" min="1" />
+                    </div>
+                </div>
+                <p class="container-info" id="container-volume-display">Volume: 33,135,350 cm³</p>
+            </div>
+
+            <div class="panel-section">
+                <h2 class="section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path
+                            d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z" />
+                    </svg>
+                    Boxes
+                    <span class="badge" id="box-count-badge">0</span>
+                </h2>
+                <div class="box-actions-row">
+                    <button id="btn-load-dataset" class="btn btn-secondary btn-sm">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Load Dataset
+                    </button>
+                    <button id="btn-add-box" class="btn btn-primary btn-sm">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19" />
+                            <line x1="5" y1="12" x2="19" y2="12" />
+                        </svg>
+                        Add Box
+                    </button>
+                    <button id="btn-clear-boxes" class="btn btn-danger btn-sm">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2">
+                            <polyline points="3 6 5 6 21 6" />
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+                        </svg>
+                        Clear
+                    </button>
+                </div>
+                <div class="box-table-wrapper" id="box-table-wrapper">
+                    <table id="box-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>L</th>
+                                <th>W</th>
+                                <th>H</th>
+                                <th>Wt</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="box-table-body">
+                            <!-- Rows dynamically inserted -->
+                        </tbody>
+                    </table>
+                    <p class="empty-state" id="empty-state">No boxes added yet. Click "Load Dataset" or "Add Box".</p>
+                </div>
+            </div>
+
+            <div class="panel-section">
+                <h2 class="section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                    </svg>
+                    Algorithm
+                </h2>
+                <select id="algorithm-select" class="select-input">
+                    <option value="ga">🧬 Genetic Algorithm (GA)</option>
+                    <option value="greedy">📦 Greedy Best-Fit Decreasing</option>
+                    <option value="sa">🌡️ Simulated Annealing (SA)</option>
+                </select>
+
+                <button id="btn-solve" class="btn btn-accent btn-lg">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    Run Solver
+                </button>
+                <button id="btn-compare" class="btn btn-gradient btn-lg">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="20" x2="18" y2="10" />
+                        <line x1="12" y1="20" x2="12" y2="4" />
+                        <line x1="6" y1="20" x2="6" y2="14" />
+                    </svg>
+                    Compare All
+                </button>
+            </div>
+        </aside>
+
+        <!-- ─── CENTER: 3D VIEWPORT ─── -->
+        <section id="viewport-container">
+            <div id="three-canvas-wrapper">
+                <canvas id="three-canvas"></canvas>
+                <div id="viewport-overlay">
+                    <span id="fps-counter">-- FPS</span>
+                </div>
+                <div id="viewport-watermark">
+                    <span>Drag to rotate • Scroll to zoom • Right-click to pan</span>
+                </div>
+            </div>
+            <!-- Loading spinner -->
+            <div id="loading-overlay" class="hidden">
+                <div class="spinner"></div>
+                <p class="loading-text">Running algorithm…</p>
+            </div>
+            <!-- Fill animation counter -->
+            <div id="fill-counter" class="hidden"></div>
+        </section>
+
+        <!-- ─── RIGHT PANEL: RESULTS ─── -->
+        <aside id="panel-right" class="panel">
+            <div class="panel-section">
+                <h2 class="section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
+                    Results
+                </h2>
+                <div id="results-placeholder" class="empty-state">
+                    Run the solver to see results here.
+                </div>
+                <div id="results-content" class="hidden">
+                    <div class="stat-card stat-utilization">
+                        <span class="stat-label">Volume Utilization</span>
+                        <div class="stat-value-row">
+                            <span class="stat-value" id="stat-utilization">0%</span>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progress-utilization"></div>
+                        </div>
+                    </div>
+                    <div class="stat-row">
+                        <div class="stat-card stat-mini">
+                            <span class="stat-label">Boxes Placed</span>
+                            <span class="stat-value" id="stat-placed">0 / 0</span>
+                        </div>
+                        <div class="stat-card stat-mini">
+                            <span class="stat-label">Time</span>
+                            <span class="stat-value" id="stat-time">0s</span>
+                        </div>
+                    </div>
+                    <div class="stat-card stat-mini">
+                        <span class="stat-label">Fitness Score</span>
+                        <span class="stat-value" id="stat-fitness">0</span>
+                    </div>
+                    <div class="stat-card stat-mini">
+                        <span class="stat-label">Algorithm</span>
+                        <span class="stat-value" id="stat-algorithm">—</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comparison section -->
+            <div class="panel-section">
+                <h2 class="section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="18" y1="20" x2="18" y2="10" />
+                        <line x1="12" y1="20" x2="12" y2="4" />
+                        <line x1="6" y1="20" x2="6" y2="14" />
+                    </svg>
+                    Comparison
+                </h2>
+                <div id="comparison-placeholder" class="empty-state">
+                    Click "Compare All" to see a side-by-side comparison.
+                </div>
+                <div id="comparison-content" class="hidden">
+                    <table class="comparison-table" id="comparison-table">
+                        <thead>
+                            <tr>
+                                <th>Algorithm</th>
+                                <th>Util. %</th>
+                                <th>Placed</th>
+                                <th>Time (s)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comparison-table-body"></tbody>
+                    </table>
+                    <div class="chart-wrapper">
+                        <canvas id="comparison-chart" height="180"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Box legend -->
+            <div class="panel-section">
+                <h2 class="section-title">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <path d="M3 9h18M9 3v18" />
+                    </svg>
+                    Box Legend
+                </h2>
+                <div id="box-legend" class="box-legend">
+                    <p class="empty-state">Solve to see box colors.</p>
+                </div>
+            </div>
+        </aside>
+    </main>
+
+    <script src="/static/script.js"></script>
+</body>
+
+</html>

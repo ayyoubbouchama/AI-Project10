@@ -3,71 +3,85 @@
 # Algorithm: Greedy Best-Fit Decreasing (BFD) + Bottom-Left-Fill (BLF)
 # ==============================================================================
 from core.models import Box, Container
-def solve(boxes, container):
-    positions = []
 
-    sorted_boxes = sorted(boxes, key=lambda b: b.l * b.w * b.h, reverse=True)
 
-    placed = []
+class GreedyBFD:
+    """
+    A class-based Greedy Best-Fit Decreasing (BFD) solver with
+    Bottom-Left-Fill (BLF) placement for the 3-D container loading problem.
+    """
 
-    for box in sorted_boxes:
-        candidate_corners = [(0, 0, 0)]
+    @staticmethod
+    def solve(boxes, container):
+        positions = []
 
-        for p in placed:
-            candidate_corners.append((p["x"] + p["l"], p["y"], p["z"]))
-            candidate_corners.append((p["x"], p["y"] + p["w"], p["z"]))
-            candidate_corners.append((p["x"], p["y"], p["z"] + p["h"]))
+        sorted_boxes = sorted(boxes, key=lambda b: b.l * b.w * b.h, reverse=True)
 
-        best_position = None
-        best_key = None
+        placed = []
 
-        for (cx, cy, cz) in candidate_corners:
-            if (cx + box.l > container.L or
-                cy + box.w > container.W or
-                cz + box.h > container.H):
-                continue
+        for box in sorted_boxes:
+            candidate_corners = [(0, 0, 0)]
 
-            overlaps = False
             for p in placed:
-                if (cx < p["x"] + p["l"] and cx + box.l > p["x"] and
-                    cy < p["y"] + p["w"] and cy + box.w > p["y"] and
-                    cz < p["z"] + p["h"] and cz + box.h > p["z"]):
-                    overlaps = True
-                    break
+                candidate_corners.append((p["x"] + p["l"], p["y"], p["z"]))
+                candidate_corners.append((p["x"], p["y"] + p["w"], p["z"]))
+                candidate_corners.append((p["x"], p["y"], p["z"] + p["h"]))
 
-            if overlaps:
-                continue
+            best_position = None
+            best_key = None
 
-            key = (cz, cy, cx)
-            if best_key is None or key < best_key:
-                best_key = key
-                best_position = (cx, cy, cz)
+            for (cx, cy, cz) in candidate_corners:
+                if (cx + box.l > container.L or
+                    cy + box.w > container.W or
+                    cz + box.h > container.H):
+                    continue
 
-        if best_position is not None:
-            x, y, z = best_position
+                overlaps = False
+                for p in placed:
+                    if (cx < p["x"] + p["l"] and cx + box.l > p["x"] and
+                        cy < p["y"] + p["w"] and cy + box.w > p["y"] and
+                        cz < p["z"] + p["h"] and cz + box.h > p["z"]):
+                        overlaps = True
+                        break
 
-            placed.append({
-                "x": x, "y": y, "z": z,
-                "l": box.l, "w": box.w, "h": box.h
-            })
+                if overlaps:
+                    continue
 
-            positions.append({
-                "id": box.id,
-                "x": x,
-                "y": y,
-                "z": z,
-                "l": box.l,
-                "w": box.w,
-                "h": box.h
-            })
+                key = (cz, cy, cx)
+                if best_key is None or key < best_key:
+                    best_key = key
+                    best_position = (cx, cy, cz)
 
-    placed_volume = sum(p["l"] * p["w"] * p["h"] for p in positions)
-    container_volume = container.L * container.W * container.H
-    utilization = (placed_volume / container_volume) * 100
+            if best_position is not None:
+                x, y, z = best_position
 
-    return {
-        "positions": positions,
-        "utilization": utilization
-    }
+                placed.append({
+                    "x": x, "y": y, "z": z,
+                    "l": box.l, "w": box.w, "h": box.h
+                })
+
+                positions.append({
+                    "id": box.id,
+                    "x": x,
+                    "y": y,
+                    "z": z,
+                    "l": box.l,
+                    "w": box.w,
+                    "h": box.h
+                })
+
+        placed_volume = sum(p["l"] * p["w"] * p["h"] for p in positions)
+        container_volume = container.L * container.W * container.H
+        utilization = (placed_volume / container_volume) * 100
+
+        return {
+            "positions": positions,
+            "utilization": utilization
+        }
 
 
+# ─────────────────────────── backward-compat shim ─────────────────
+# Allows existing callers to keep using  `from algorithms.greedy import solve`
+
+def solve(boxes, container):
+    return GreedyBFD.solve(boxes, container)

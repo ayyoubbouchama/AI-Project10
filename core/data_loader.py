@@ -22,7 +22,9 @@ def load_data(path):
                     l=bt["length_cm"],
                     w=bt["width_cm"],
                     h=bt["height_cm"],
-                    weight=bt["weight_kg"]
+                    weight=bt["weight_kg"],
+                    fragile=bt.get("fragile", False),
+                    orientation_locked=bt.get("orientation_locked", False),
                 )
             )
             id_counter += 1
