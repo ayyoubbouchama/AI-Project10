@@ -87,8 +87,9 @@ def _run_algorithm(name, boxes, container):
         from algorithms.greedy import solve
         result = solve(boxes, container)
     elif name == "sa":
-        from algorithms import simulated_annealing
-        result = simulated_annealing.solve(boxes, container)
+        from algorithms.simulated_annealing import SimulatedAnnealing
+        # Use 60s time limit for web responsiveness (full run uses 300s)
+        result = SimulatedAnnealing.solve(boxes, container, time_limit=60.0)
     else:
         raise ValueError(f"Unknown algorithm: {name}")
 

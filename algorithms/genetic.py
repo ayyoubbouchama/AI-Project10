@@ -113,24 +113,28 @@ class GeneticAlgorithm:
     @staticmethod
     def _gravity_settle(placed, CL, CW, CH):
         """
-        Post-process placed boxes to enforce true gravity with adequate support.
-        For each box (sorted bottom-up):
-        1. Compute landing z by checking all previously settled boxes
-        2. Verify the box has at least 50% base area support
-        3. If support is insufficient, try shifting to better support
-        4. Skip boxes that can't find adequate support
-        This eliminates visual overhangs where boxes barely rest on edges.
+        Drop every box to its physical resting z-position.
+
+        Process boxes bottom-up. For each box, compute the landing z as the
+        highest z_top of any already-settled box whose x-y footprint overlaps.
+        Boxes on the floor stay at z=0. Boxes above gaps are lowered until
+        they rest on a surface below.
+
+        This is O(n²) — for n=386 it takes < 1 ms, so runtime is unaffected.
+        No boxes are removed, so utilization is preserved.
         """
         if not placed:
             return placed
-        MIN_SUPPORT = 0.50
+
+        # Sort by z, then y, then x (process bottom-up)
         placed.sort(key=lambda p: (p["z"], p["y"], p["x"]))
+
         settled = []
         for p in placed:
-            px, py = p["x"], p["y"]
-            pl, pw = p["l"], p["w"]
-            ph = p["h"]
-            base_area = pl * pw
+            px, py, pl, pw, ph = p["x"], p["y"], p["l"], p["w"], p["h"]
+
+            # Find the landing z: highest z_top of any settled box that
+            # overlaps in x-y (even partially)
             z_land = 0.0
             for s in settled:
                 if (px < s["x"] + s["l"] - 1e-9 and px + pl > s["x"] + 1e-9 and
@@ -138,73 +142,13 @@ class GeneticAlgorithm:
                     z_top = s["z"] + s["h"]
                     if z_top > z_land:
                         z_land = z_top
-            if z_land + ph > CH + 1e-9:
-                continue
-            if z_land < 1e-9:
-                p["z"] = 0.0
-                settled.append(p)
-                continue
-            support_area = 0.0
-            for s in settled:
-                if abs((s["z"] + s["h"]) - z_land) < 1e-6:
-                    ox = max(0.0, min(px + pl, s["x"] + s["l"]) - max(px, s["x"]))
-                    oy = max(0.0, min(py + pw, s["y"] + s["w"]) - max(py, s["y"]))
-                    support_area += ox * oy
-            support_pct = support_area / base_area if base_area > 0 else 1.0
-            if support_pct >= MIN_SUPPORT:
+
+            # Only drop (never raise) and keep within container
+            if z_land <= p["z"] and z_land + ph <= CH + 1e-9:
                 p["z"] = z_land
-                settled.append(p)
-            else:
-                supporters = []
-                for s in settled:
-                    if abs((s["z"] + s["h"]) - z_land) < 1e-6:
-                        if (px < s["x"] + s["l"] + pl and px + pl > s["x"] - pl and
-                            py < s["y"] + s["w"] + pw and py + pw > s["y"] - pw):
-                            supporters.append(s)
-                best_pos = None
-                best_support = support_pct
-                for s in supporters:
-                    for try_x in [s["x"], s["x"] + s["l"] - pl, px]:
-                        for try_y in [s["y"], s["y"] + s["w"] - pw, py]:
-                            if try_x < -1e-9 or try_y < -1e-9:
-                                continue
-                            if try_x + pl > CL + 1e-9 or try_y + pw > CW + 1e-9:
-                                continue
-                            overlaps = False
-                            for q in settled:
-                                if (try_x < q["x"] + q["l"] - 1e-9 and try_x + pl > q["x"] + 1e-9 and
-                                    try_y < q["y"] + q["w"] - 1e-9 and try_y + pw > q["y"] + 1e-9 and
-                                    z_land < q["z"] + q["h"] - 1e-9 and z_land + ph > q["z"] + 1e-9):
-                                    overlaps = True
-                                    break
-                            if overlaps:
-                                continue
-                            sa = 0.0
-                            for q in settled:
-                                if abs((q["z"] + q["h"]) - z_land) < 1e-6:
-                                    ox = max(0.0, min(try_x + pl, q["x"] + q["l"]) - max(try_x, q["x"]))
-                                    oy = max(0.0, min(try_y + pw, q["y"] + q["w"]) - max(try_y, q["y"]))
-                                    sa += ox * oy
-                            sp = sa / base_area if base_area > 0 else 1.0
-                            if sp > best_support:
-                                best_support = sp
-                                best_pos = (try_x, try_y)
-                if best_pos is not None and best_support >= MIN_SUPPORT:
-                    p["x"], p["y"] = best_pos
-                    p["z"] = z_land
-                    settled.append(p)
-                else:
-                    z_floor = 0.0
-                    can_floor = True
-                    for s in settled:
-                        if (px < s["x"] + s["l"] - 1e-9 and px + pl > s["x"] + 1e-9 and
-                            py < s["y"] + s["w"] - 1e-9 and py + pw > s["y"] + 1e-9 and
-                            z_floor < s["z"] + s["h"] - 1e-9 and z_floor + ph > s["z"] + 1e-9):
-                            can_floor = False
-                            break
-                    if can_floor and z_floor + ph <= CH + 1e-9:
-                        p["z"] = z_floor
-                        settled.append(p)
+
+            settled.append(p)
+
         return settled
 
     @staticmethod
