@@ -193,6 +193,40 @@
             </div>
             <!-- Fill animation counter -->
             <div id="fill-counter" class="hidden"></div>
+
+            <!-- ─── COMPARISON MULTI-VIEWPORT ─── -->
+            <div id="comparison-viewport" class="hidden">
+                <button id="btn-back-single" class="btn btn-secondary btn-back-single" title="Back to single view">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="19" y1="12" x2="5" y2="12" />
+                        <polyline points="12 19 5 12 12 5" />
+                    </svg>
+                    Single View
+                </button>
+                <div class="compare-grid">
+                    <div class="compare-cell" id="compare-cell-ga">
+                        <div class="compare-label">🧬 Genetic Algorithm</div>
+                        <div class="compare-canvas-wrapper">
+                            <canvas id="compare-canvas-ga"></canvas>
+                        </div>
+                        <div class="compare-stat" id="compare-stat-ga">—</div>
+                    </div>
+                    <div class="compare-cell" id="compare-cell-greedy">
+                        <div class="compare-label">📦 Greedy (BFD)</div>
+                        <div class="compare-canvas-wrapper">
+                            <canvas id="compare-canvas-greedy"></canvas>
+                        </div>
+                        <div class="compare-stat" id="compare-stat-greedy">—</div>
+                    </div>
+                    <div class="compare-cell" id="compare-cell-sa">
+                        <div class="compare-label">🌡️ Simulated Annealing</div>
+                        <div class="compare-canvas-wrapper">
+                            <canvas id="compare-canvas-sa"></canvas>
+                        </div>
+                        <div class="compare-stat" id="compare-stat-sa">—</div>
+                    </div>
+                </div>
+            </div>
         </section>
 
         <!-- ─── RIGHT PANEL: RESULTS ─── -->

@@ -576,18 +576,205 @@ async function runCompare() {
 
         displayComparison(data.results);
 
-        // Show the best result in the 3D view
+        // Show the best result in the right-panel results
         const best = data.results.reduce((a, b) =>
             a.utilization > b.utilization ? a : b
         );
         currentPositions = best.positions;
         displayResults(best);
         updateLegend(best.positions);
-        hideLoading(); // hide spinner so user sees the 3D animation
-        await drawPackedBoxes(best.positions);
+        hideLoading();
+
+        // Show comparison multi-viewport
+        showComparisonViewport(data.results);
     } catch (err) {
         hideLoading();
         alert("Comparison failed: " + err.message);
+    }
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+//  COMPARISON MULTI-VIEWPORT (side-by-side 3D scenes)
+// ═══════════════════════════════════════════════════════════════
+
+const comparisonViewport = document.getElementById("comparison-viewport");
+const threeCanvasWrapper = document.getElementById("three-canvas-wrapper");
+let compareScenes = {};       // { ga: { scene, camera, renderer, controls, meshes }, ... }
+let compareAnimFrameId = null;
+
+function showComparisonViewport(results) {
+    // Hide main single viewport, show comparison
+    threeCanvasWrapper.style.display = "none";
+    document.getElementById("viewport-watermark").style.display = "none";
+    document.getElementById("viewport-overlay").style.display = "none";
+    comparisonViewport.classList.remove("hidden");
+
+    // Find best
+    const bestUtil = Math.max(...results.map(r => r.utilization));
+
+    // Init each cell
+    results.forEach(r => {
+        const algo = r.algorithm;
+        const cell = document.getElementById(`compare-cell-${algo}`);
+        const canvas = document.getElementById(`compare-canvas-${algo}`);
+        const statEl = document.getElementById(`compare-stat-${algo}`);
+
+        // Mark best
+        cell.classList.toggle("best-cell", r.utilization === bestUtil);
+
+        // Stat line
+        statEl.textContent = `${r.utilization.toFixed(1)}%  ·  ${r.boxesPlaced}/${r.totalBoxes} boxes  ·  ${r.executionTime.toFixed(3)}s`;
+
+        // Init Three.js scene for this cell
+        initCompareScene(algo, canvas, r.positions);
+    });
+
+    // Start animation loop for all comparison scenes
+    startCompareAnimation();
+}
+
+function hideComparisonViewport() {
+    comparisonViewport.classList.add("hidden");
+    threeCanvasWrapper.style.display = "";
+    document.getElementById("viewport-watermark").style.display = "";
+    document.getElementById("viewport-overlay").style.display = "";
+
+    // Clean up comparison scenes
+    stopCompareAnimation();
+    for (const algo of Object.keys(compareScenes)) {
+        const cs = compareScenes[algo];
+        cs.renderer.dispose();
+        if (cs.controls) cs.controls.dispose();
+    }
+    compareScenes = {};
+
+    // Clear best-cell classes
+    document.querySelectorAll(".compare-cell").forEach(c => c.classList.remove("best-cell"));
+}
+
+function initCompareScene(algo, canvas, positions) {
+    const wrapper = canvas.parentElement;
+    const w = wrapper.clientWidth || 400;
+    const h = wrapper.clientHeight || 300;
+
+    const cScene = new THREE.Scene();
+
+    const cCamera = new THREE.PerspectiveCamera(45, w / h, 0.1, 50000);
+
+    const cRenderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+    cRenderer.setSize(w, h);
+    cRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    cRenderer.setClearColor(0x0b0e14, 1);
+    cRenderer.shadowMap.enabled = true;
+
+    const cControls = new THREE.OrbitControls(cCamera, cRenderer.domElement);
+    cControls.enableDamping = true;
+    cControls.dampingFactor = 0.08;
+    cControls.minDistance = 100;
+    cControls.maxDistance = 5000;
+
+    // Lighting
+    const ambient = new THREE.AmbientLight(0xffffff, 0.5);
+    cScene.add(ambient);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(500, 800, 400);
+    dirLight.castShadow = true;
+    cScene.add(dirLight);
+    const fillLight = new THREE.DirectionalLight(0x8b5cf6, 0.2);
+    fillLight.position.set(-300, 200, -200);
+    cScene.add(fillLight);
+
+    // Grid
+    const grid = new THREE.GridHelper(2000, 40, 0x1a1f2e, 0x111620);
+    grid.position.y = -0.5;
+    cScene.add(grid);
+
+    // Container wireframe
+    const L = parseFloat(containerL.value) || 590;
+    const W = parseFloat(containerW.value) || 235;
+    const H = parseFloat(containerH.value) || 239;
+
+    const geo = new THREE.BoxGeometry(L, H, W);
+    const edges = new THREE.EdgesGeometry(geo);
+    const lineMat = new THREE.LineBasicMaterial({ color: 0x2a3040 });
+    const contMesh = new THREE.LineSegments(edges, lineMat);
+    contMesh.position.set(L / 2, H / 2, W / 2);
+    cScene.add(contMesh);
+
+    // Floor
+    const floorGeo = new THREE.PlaneGeometry(L, W);
+    const floorMat = new THREE.MeshStandardMaterial({ color: 0x111620, transparent: true, opacity: 0.5, side: THREE.DoubleSide });
+    const floor = new THREE.Mesh(floorGeo, floorMat);
+    floor.rotation.x = -Math.PI / 2;
+    floor.position.set(L / 2, 0.01, W / 2);
+    floor.receiveShadow = true;
+    contMesh.add(floor);
+
+    // Camera position
+    cCamera.position.set(L * 1.3, H * 1.5, W * 2);
+    cControls.target.set(L / 2, H / 2, W / 2);
+    cControls.update();
+
+    // Draw packed boxes (instant, no animation)
+    const meshes = [];
+    if (positions && positions.length > 0) {
+        positions.forEach((pos, i) => {
+            const color = getBoxColor(i);
+            const boxGeo = new THREE.BoxGeometry(pos.l, pos.h, pos.w);
+            const boxMat = new THREE.MeshStandardMaterial({
+                color, transparent: true, opacity: 0.7, roughness: 0.3, metalness: 0.1,
+            });
+            const mesh = new THREE.Mesh(boxGeo, boxMat);
+            mesh.position.set(pos.x + pos.l / 2, pos.z + pos.h / 2, pos.y + pos.w / 2);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            cScene.add(mesh);
+            meshes.push(mesh);
+
+            // Edges
+            const edgeGeo = new THREE.EdgesGeometry(boxGeo);
+            const edgeMat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3 });
+            const edgeMesh = new THREE.LineSegments(edgeGeo, edgeMat);
+            edgeMesh.position.copy(mesh.position);
+            cScene.add(edgeMesh);
+            meshes.push(edgeMesh);
+        });
+    }
+
+    compareScenes[algo] = { scene: cScene, camera: cCamera, renderer: cRenderer, controls: cControls, meshes, wrapper };
+}
+
+function startCompareAnimation() {
+    stopCompareAnimation();
+
+    function tick() {
+        for (const algo of Object.keys(compareScenes)) {
+            const cs = compareScenes[algo];
+
+            // Handle resize
+            const w = cs.wrapper.clientWidth;
+            const h = cs.wrapper.clientHeight;
+            if (w > 0 && h > 0) {
+                if (cs.renderer.domElement.width !== w || cs.renderer.domElement.height !== h) {
+                    cs.renderer.setSize(w, h);
+                    cs.camera.aspect = w / h;
+                    cs.camera.updateProjectionMatrix();
+                }
+            }
+
+            cs.controls.update();
+            cs.renderer.render(cs.scene, cs.camera);
+        }
+        compareAnimFrameId = requestAnimationFrame(tick);
+    }
+    compareAnimFrameId = requestAnimationFrame(tick);
+}
+
+function stopCompareAnimation() {
+    if (compareAnimFrameId) {
+        cancelAnimationFrame(compareAnimFrameId);
+        compareAnimFrameId = null;
     }
 }
 
@@ -727,6 +914,7 @@ document.getElementById("btn-add-box").addEventListener("click", () => addBox())
 document.getElementById("btn-clear-boxes").addEventListener("click", clearBoxes);
 document.getElementById("btn-solve").addEventListener("click", runSolver);
 document.getElementById("btn-compare").addEventListener("click", runCompare);
+document.getElementById("btn-back-single").addEventListener("click", hideComparisonViewport);
 
 
 // ═══════════════════════════════════════════════════════════════
@@ -736,3 +924,4 @@ document.getElementById("btn-compare").addEventListener("click", runCompare);
 updateBoxCount();
 initThree();
 updateContainerVolume();
+
