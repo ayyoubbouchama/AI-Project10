@@ -3,10 +3,10 @@ Genetic Algorithm for 3D Container Loading - Best-in-Class
 ==========================================================
 
 KEY FEATURES:
-1. Shelf-based fast decoder (via space_manager) with gravity enforcement
+1. Internal shelf-based decoder with gravity settling
 2. Fragile box orientation locking
 3. Multi-objective fitness: utilization + stability - penalties
-4. Three crossover operators: OX1, OX2, PMX
+4. Three crossover operators: OX1, OX2, PMX (proper mapping-table)
 5. Four mutation operators: swap, inversion, rotation, scramble
 6. Adaptive mutation pressure based on convergence
 7. Smart population seeding with 12 heuristics
@@ -14,14 +14,16 @@ KEY FEATURES:
 9. 2-opt local search on elite solutions
 10. Duplicate elimination for diversity
 
-DECODER (shelf-based placement via space_manager.place_boxes):
-  - O(n) per call - for n=386: ~3 ms vs ~2200 ms with extreme-points
+DECODER (internal shelf-based placement via _decode_chromosome):
+  - O(n) per call - for n=386: ~3 ms
   - No overlap possible by construction
-  - Gravity satisfied by construction (layers rest on each other / floor)
-  - Deterministic, consistent, valid - same ordering always gives same packing
+  - Gravity enforced via _gravity_settle() post-processing
+  - Deterministic: same chromosome always gives same packing
+  - Functionally equivalent to SA's decoder and space_manager.place_boxes
 """
 
 import random
+import time
 from core.utils import compute_utilization, compute_stability
 
 
@@ -32,17 +34,17 @@ class GeneticAlgorithm:
     """
 
     # ---- hyper-parameters ----
-    POPULATION_SIZE   = 50
-    NUM_GENERATIONS   = 100
+    POPULATION_SIZE   = 80
+    NUM_GENERATIONS   = 150
     TOURNAMENT_SIZE   = 5
     CROSSOVER_RATE    = 0.90
     MUTATION_SWAP     = 0.20
     MUTATION_INVERT   = 0.18
-    MUTATION_ROT      = 0.16
+    MUTATION_ROT      = 0.25
     MUTATION_SCRAMBLE = 0.10
     UNPLACED_PENALTY  = 35.0
-    ELITE_COUNT       = 4
-    STAGNATION_LIMIT  = 20
+    ELITE_COUNT       = 6
+    STAGNATION_LIMIT  = 12
     RESTART_RATIO     = 0.45
     SEED_RATIO        = 0.30
     NUM_ROTATIONS     = 6
@@ -303,24 +305,37 @@ class GeneticAlgorithm:
 
     @staticmethod
     def pmx_crossover(p1, p2):
-        """Partially Mapped Crossover."""
+        """Partially Mapped Crossover with proper mapping-table traversal."""
         n = len(p1)
         start, end = sorted(random.sample(range(n), 2))
         child = [None] * n
+        # Step 1: Copy segment from P1
         child[start:end + 1] = p1[start:end + 1]
-        used = {g[0] for g in child if g is not None}
+        used = {g[0] for g in child[start:end + 1]}
+        # Step 2: Build forward mapping: for each position in the segment,
+        # map P2's box_id to P1's box_id (what replaced it)
+        map_p2_to_p1 = {}
+        for i in range(start, end + 1):
+            map_p2_to_p1[p2[i][0]] = p1[i][0]
+        # Step 3: Fill remaining positions
         for i in range(n):
-            if child[i] is not None: continue
-            gene = p2[i]
-            if gene[0] not in used:
-                child[i] = gene
-                used.add(gene[0])
-        fill = [g for g in p2 if g[0] not in used]
-        fi = 0
-        for i in range(n):
-            if child[i] is None:
-                child[i] = fill[fi]
-                fi += 1
+            if child[i] is not None:
+                continue
+            box_id = p2[i][0]
+            rot = p2[i][1]
+            # Chase through mapping until we find an unused box_id
+            seen = set()
+            while box_id in used and box_id not in seen:
+                seen.add(box_id)
+                box_id = map_p2_to_p1.get(box_id, box_id)
+            if box_id in used:
+                # Fallback: pick any unused box_id
+                all_ids = {g[0] for g in p1}
+                remaining = all_ids - used
+                if remaining:
+                    box_id = remaining.pop()
+            child[i] = (box_id, rot)
+            used.add(box_id)
         return child
 
     @staticmethod
@@ -442,65 +457,96 @@ class GeneticAlgorithm:
 
     # ---- main solver ----
     @staticmethod
-    def solve(boxes, container):
+    def solve(boxes, container, seed=42, time_limit=240.0):
+        random.seed(seed)
+        wall_start = time.perf_counter()
         GA = GeneticAlgorithm
         n = len(boxes)
-        n_seeds = max(1, int(GA.POPULATION_SIZE * GA.SEED_RATIO))
-        seeds = GA.build_seed_population(boxes, n_seeds)
-        randoms = [GA.random_chromosome(boxes) for _ in range(GA.POPULATION_SIZE - n_seeds)]
-        population = seeds + randoms
         best_chromosome = None
         best_positions  = []
         best_score      = -float("inf")
         best_util       = 0.0
         history         = []
-        stagnation      = 0
-        fitness_history = []
-        for generation in range(GA.NUM_GENERATIONS):
-            evaluated = [GA.fitness(c, boxes, container) for c in population]
-            scores    = [e[0] for e in evaluated]
-            positions = [e[1] for e in evaluated]
-            utils     = [e[2] for e in evaluated]
-            gen_best = max(range(len(population)), key=lambda i: scores[i])
-            if scores[gen_best] > best_score:
-                best_score      = scores[gen_best]
-                best_positions  = positions[gen_best]
-                best_util       = utils[gen_best]
-                best_chromosome = population[gen_best][:]
-                stagnation      = 0
+        restart_round   = 0
+
+        # ── Time-based restart loop ──────────────────────────────
+        while True:
+            restart_round += 1
+            # Build population: first round uses heuristic seeds,
+            # subsequent rounds seed from the best chromosome found
+            if restart_round == 1:
+                n_seeds = max(1, int(GA.POPULATION_SIZE * GA.SEED_RATIO))
+                seeds = GA.build_seed_population(boxes, n_seeds)
+                randoms = [GA.random_chromosome(boxes)
+                           for _ in range(GA.POPULATION_SIZE - n_seeds)]
+                population = seeds + randoms
             else:
-                stagnation += 1
-            history.append(round(best_util, 2))
-            fitness_history.append(best_score)
-            if best_util >= 95.0 and len(best_positions) == n:
+                # Seed from global best + heuristic seeds + randoms
+                n_seeds = max(1, int(GA.POPULATION_SIZE * GA.SEED_RATIO))
+                seeds = GA.build_seed_population(boxes, n_seeds)
+                randoms = [GA.random_chromosome(boxes)
+                           for _ in range(GA.POPULATION_SIZE - n_seeds - 1)]
+                population = [best_chromosome[:]] + seeds + randoms
+
+            stagnation      = 0
+            fitness_history  = []
+
+            for generation in range(GA.NUM_GENERATIONS):
+                # Check time limit
+                if time.perf_counter() - wall_start >= time_limit:
+                    break
+
+                evaluated = [GA.fitness(c, boxes, container) for c in population]
+                scores    = [e[0] for e in evaluated]
+                positions = [e[1] for e in evaluated]
+                utils     = [e[2] for e in evaluated]
+                gen_best = max(range(len(population)), key=lambda i: scores[i])
+                if scores[gen_best] > best_score:
+                    best_score      = scores[gen_best]
+                    best_positions  = positions[gen_best]
+                    best_util       = utils[gen_best]
+                    best_chromosome = population[gen_best][:]
+                    stagnation      = 0
+                else:
+                    stagnation += 1
+                history.append(round(best_util, 2))
+                fitness_history.append(best_score)
+                if best_util >= 80.0 and len(best_positions) == n:
+                    break
+                recent = fitness_history[-min(10, len(fitness_history)):]
+                if len(recent) >= 2:
+                    spread = max(recent) - min(recent)
+                    convergence = max(0.0, min(1.0, 1.0 - spread / (abs(best_score) + 1e-6)))
+                else:
+                    convergence = 0.5
+                if stagnation >= GA.STAGNATION_LIMIT:
+                    population = GA.restart_population(population, scores, boxes)
+                    stagnation = 0
+                    continue
+                ranked = sorted(range(len(population)), key=lambda i: scores[i], reverse=True)
+                elite = [population[i][:] for i in ranked[:GA.ELITE_COUNT]]
+                if generation % 15 == 0 and generation > 0:
+                    elite = [GA.local_search_2opt(c, boxes, container, 3) for c in elite]
+                new_pop = elite[:]
+                progress = generation / max(1, GA.NUM_GENERATIONS - 1)
+                t_size = max(3, int(GA.TOURNAMENT_SIZE * (1.0 - 0.4 * progress)))
+                pressure = 0.8 + 0.5 * convergence
+                while len(new_pop) < GA.POPULATION_SIZE:
+                    p1 = GA.tournament_select(population, scores, t_size)
+                    p2 = GA.tournament_select(population, scores, t_size)
+                    child = GA.crossover(p1, p2) if random.random() < GA.CROSSOVER_RATE else p1[:]
+                    child = GA.mutate(child, boxes, pressure)
+                    new_pop.append(child)
+                if generation % 15 == 0:
+                    new_pop = GA.remove_duplicates(new_pop, boxes)
+                population = new_pop
+
+            # Check if time is up — if so, stop; otherwise restart
+            if time.perf_counter() - wall_start >= time_limit:
                 break
-            recent = fitness_history[-min(10, len(fitness_history)):]
-            if len(recent) >= 2:
-                spread = max(recent) - min(recent)
-                convergence = max(0.0, min(1.0, 1.0 - spread / (abs(best_score) + 1e-6)))
-            else:
-                convergence = 0.5
-            if stagnation >= GA.STAGNATION_LIMIT:
-                population = GA.restart_population(population, scores, boxes)
-                stagnation = 0
-                continue
-            ranked = sorted(range(len(population)), key=lambda i: scores[i], reverse=True)
-            elite = [population[i][:] for i in ranked[:GA.ELITE_COUNT]]
-            if generation % 30 == 0 and generation > 0:
-                elite = [GA.local_search_2opt(c, boxes, container, 3) for c in elite]
-            new_pop = elite[:]
-            progress = generation / max(1, GA.NUM_GENERATIONS - 1)
-            t_size = max(3, int(GA.TOURNAMENT_SIZE * (1.0 - 0.4 * progress)))
-            pressure = 0.8 + 0.5 * convergence
-            while len(new_pop) < GA.POPULATION_SIZE:
-                p1 = GA.tournament_select(population, scores, t_size)
-                p2 = GA.tournament_select(population, scores, t_size)
-                child = GA.crossover(p1, p2) if random.random() < GA.CROSSOVER_RATE else p1[:]
-                child = GA.mutate(child, boxes, pressure)
-                new_pop.append(child)
-            if generation % 15 == 0:
-                new_pop = GA.remove_duplicates(new_pop, boxes)
-            population = new_pop
+            if best_util >= 80.0 and len(best_positions) == n:
+                break
+
         return {
             "positions":   best_positions,
             "utilization": round(best_util, 2),
@@ -514,7 +560,7 @@ POPULATION_SIZE   = GeneticAlgorithm.POPULATION_SIZE
 NUM_GENERATIONS   = GeneticAlgorithm.NUM_GENERATIONS
 
 
-def solve(boxes, container):
+def solve(boxes, container, seed=42, time_limit=240.0):
     GeneticAlgorithm.POPULATION_SIZE = POPULATION_SIZE
     GeneticAlgorithm.NUM_GENERATIONS = NUM_GENERATIONS
-    return GeneticAlgorithm.solve(boxes, container)
+    return GeneticAlgorithm.solve(boxes, container, seed=seed, time_limit=time_limit)

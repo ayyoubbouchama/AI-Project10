@@ -72,17 +72,8 @@ def _run_algorithm(name, boxes, container):
     start = time.perf_counter()
 
     if name == "ga":
-        from algorithms import genetic
-        # Use smaller parameters for web responsiveness
-        original_pop = genetic.POPULATION_SIZE
-        original_gen = genetic.NUM_GENERATIONS
-        genetic.POPULATION_SIZE = 40
-        genetic.NUM_GENERATIONS = 60
-        try:
-            result = genetic.solve(boxes, container)
-        finally:
-            genetic.POPULATION_SIZE = original_pop
-            genetic.NUM_GENERATIONS = original_gen
+        from algorithms.genetic import solve as ga_solve
+        result = ga_solve(boxes, container)
     elif name == "greedy":
         from algorithms.greedy import solve
         result = solve(boxes, container)
@@ -143,6 +134,8 @@ def get_dataset():
                 "width": float(bt["width_cm"]),
                 "height": float(bt["height_cm"]),
                 "weight": float(bt["weight_kg"]),
+                "fragile": bt.get("fragile", False),
+                "orientation_locked": bt.get("orientation_locked", False),
             })
             box_id += 1
 
