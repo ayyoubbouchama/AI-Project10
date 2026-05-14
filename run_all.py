@@ -69,7 +69,7 @@ if "greedy" in requested:
 if "ga" in requested:
     from algorithms.genetic import GeneticAlgorithm
 
-    print("Running Genetic Algorithm (pop=80, gen=150, time_limit=240s)...")
+    print("Running Genetic Algorithm (pop=80, gen=150, time_limit=40s)...")
     start = time.perf_counter()
     result = GeneticAlgorithm.solve(boxes, container)
     elapsed = time.perf_counter() - start
@@ -103,9 +103,9 @@ if "ga" in requested:
 if "sa" in requested:
     from algorithms.simulated_annealing import SimulatedAnnealing
 
-    print("Running Simulated Annealing (time_limit=240s)...")
+    print("Running Simulated Annealing (time_limit=40s)...")
     start = time.perf_counter()
-    result = SimulatedAnnealing.solve(boxes, container, time_limit=240.0)
+    result = SimulatedAnnealing.solve(boxes, container)
     elapsed = time.perf_counter() - start
 
     out = {

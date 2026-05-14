@@ -79,8 +79,8 @@ def _run_algorithm(name, boxes, container):
         result = solve(boxes, container)
     elif name == "sa":
         from algorithms.simulated_annealing import SimulatedAnnealing
-        # Use 60s time limit for web responsiveness (full run uses 300s)
-        result = SimulatedAnnealing.solve(boxes, container, time_limit=60.0)
+        # Use 40s time limit (matches optimized default)
+        result = SimulatedAnnealing.solve(boxes, container, time_limit=40.0)
     else:
         raise ValueError(f"Unknown algorithm: {name}")
 

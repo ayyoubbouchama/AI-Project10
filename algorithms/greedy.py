@@ -214,7 +214,7 @@ class GreedyBFD:
     Result: same quality as v2, ~20× faster.
     """
 
-    SUPPORT_THRESHOLD = 0.10
+    SUPPORT_THRESHOLD = 0.50
 
     @staticmethod
     def solve(boxes, container):
