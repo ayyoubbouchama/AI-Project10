@@ -69,7 +69,7 @@ if "greedy" in requested:
 if "ga" in requested:
     from algorithms.genetic import GeneticAlgorithm
 
-    print("Running Genetic Algorithm (pop=80, gen=150, time_limit=40s)...")
+    print("Running Genetic Algorithm (pop=20, gen=40, time_limit=40s)...")
     start = time.perf_counter()
     result = GeneticAlgorithm.solve(boxes, container)
     elapsed = time.perf_counter() - start

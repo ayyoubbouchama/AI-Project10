@@ -115,8 +115,7 @@ class SimulatedAnnealing:
         CL, CW, CH = container.L, container.W, container.H
         placed = []
         unplaced = []
-        layers = []
-        z_top = 0.0
+        eps = [(0.0, 0.0, 0.0)]
         total_vol = 0.0
 
         for box_idx in chromosome:
@@ -130,51 +129,47 @@ class SimulatedAnnealing:
             box_weight = box.weight
             placed_flag = False
 
-            # Try existing layers
-            for layer in layers:
+            eps = list(set(eps))
+            eps.sort(key=lambda p: (p[2], p[1], p[0]))
+
+            for i in range(len(eps)):
+                ex, ey, ez = eps[i]
                 for (bl, bw, bh) in rots:
-                    if bh > layer[1]:
+                    ex_bl = ex + bl
+                    ey_bw = ey + bw
+                    ez_bh = ez + bh
+
+                    # Boundary check
+                    if ex_bl > CL + 1e-9 or ey_bw > CW + 1e-9 or ez_bh > CH + 1e-9:
                         continue
-                    # Try existing rows
-                    for row in layer[2]:
-                        if bw <= row[1]+1e-9 and row[2]+bl <= CL+1e-9:
-                            placed.append((box_id, row[2], row[0], layer[0],
-                                           bl, bw, bh, box_weight))
-                            row[2] += bl
-                            total_vol += bl * bw * bh
-                            placed_flag = True
+
+                    # Fast 3D AABB Overlap check
+                    overlap = False
+                    for s in placed:
+                        # s tuple format: (pid, px, py, pz, pl, pw, ph, pwt)
+                        if not (ex >= s[1] + s[4] - 1e-9 or ex_bl <= s[1] + 1e-9 or
+                                ey >= s[2] + s[5] - 1e-9 or ey_bw <= s[2] + 1e-9 or
+                                ez >= s[3] + s[6] - 1e-9 or ez_bh <= s[3] + 1e-9):
+                            overlap = True
                             break
-                    if placed_flag:
-                        break
-                    # New row in this layer
-                    y_used = sum(r[1] for r in layer[2])
-                    if y_used + bw <= CW + 1e-9:
-                        layer[2].append([y_used, bw, bl])
-                        placed.append((box_id, 0.0, y_used, layer[0],
-                                       bl, bw, bh, box_weight))
+
+                    if not overlap:
+                        placed.append((box_id, ex, ey, ez, bl, bw, bh, box_weight))
                         total_vol += bl * bw * bh
+                        
+                        eps.pop(i)
+                        eps.extend([(ex_bl, ey, ez), (ex, ey_bw, ez), (ex, ey, ez_bh)])
                         placed_flag = True
                         break
+                
                 if placed_flag:
                     break
-
-            # New layer
-            if not placed_flag:
-                for (bl, bw, bh) in rots:
-                    if z_top + bh <= CH + 1e-9:
-                        layers.append([z_top, bh, [[0.0, bw, bl]]])
-                        placed.append((box_id, 0.0, 0.0, z_top,
-                                       bl, bw, bh, box_weight))
-                        total_vol += bl * bw * bh
-                        z_top += bh
-                        placed_flag = True
-                        break
 
             if not placed_flag:
                 unplaced.append(box.id)
 
-        # Gravity drop
-        placed = SimulatedAnnealing._gravity_drop_tuples(placed, CH)
+        # Gravity drop with soft penalty
+        placed, penalty_vol = SimulatedAnnealing._gravity_drop_tuples(placed, CH)
 
         # Inline utilization
         cvol = CL * CW * CH
@@ -192,7 +187,7 @@ class SimulatedAnnealing:
         else:
             stability = max(0.0, min(100.0, (1.0 - actual_sum / worst_sum) * 100.0))
 
-        return placed, unplaced, util, stability
+        return placed, unplaced, util, stability, penalty_vol
 
     # ──────────────────────────────────────────────────────────────────────
     # Gravity drop — tuple-based
@@ -203,13 +198,17 @@ class SimulatedAnnealing:
         """
         Drop every box to its physical resting z-position.
         Works on tuples: (id, x, y, z, l, w, h, weight).
+        Enforces a 50% base area support constraint. Unsupported boxes are rejected.
         """
         if not placed:
-            return placed
+            return placed, 0.0
 
         placed_sorted = sorted(placed, key=lambda p: (p[3], p[2], p[1]))
 
         settled = []
+        penalty_vol = 0.0
+        MIN_SUP = SimulatedAnnealing.MIN_SUPPORT
+
         for p in placed_sorted:
             pid, px, py, pz, pl, pw, ph, pwt = p
 
@@ -225,17 +224,36 @@ class SimulatedAnnealing:
             if z_land <= pz and z_land + ph <= CH + 1e-9:
                 pz = z_land
 
-            settled.append((pid, px, py, pz, pl, pw, ph, pwt))
+            # Floor boxes always pass
+            if pz < 1e-9:
+                settled.append((pid, px, py, pz, pl, pw, ph, pwt))
+                continue
 
-        return settled
+            # Compute support area from settled boxes directly below
+            base_area = pl * pw
+            support_area = 0.0
+            for s in settled:
+                sx, sy, sz, sl, sw, sh = s[1], s[2], s[3], s[4], s[5], s[6]
+                if abs((sz + sh) - pz) < 1e-6:
+                    ox = max(0.0, min(px + pl, sx + sl) - max(px, sx))
+                    oy = max(0.0, min(py + pw, sy + sw) - max(py, sy))
+                    support_area += ox * oy
+
+            settled.append((pid, px, py, pz, pl, pw, ph, pwt)) # ALWAYS keep box
+            if base_area > 0 and (support_area / base_area) < MIN_SUP:
+                penalty_vol += pl * pw * ph
+
+        return settled, penalty_vol
 
     @staticmethod
     def _gravity_drop(placed, CH):
-        """Dict-based gravity drop — kept for API compatibility."""
+        """Dict-based gravity drop with support check — kept for API compatibility."""
         if not placed:
             return placed
         placed.sort(key=lambda p: (p['z'], p['y'], p['x']))
         settled = []
+        MIN_SUP = SimulatedAnnealing.MIN_SUPPORT
+        
         for p in placed:
             px, py, pl, pw, ph = p['x'], p['y'], p['l'], p['w'], p['h']
             z_land = 0.0
@@ -245,9 +263,25 @@ class SimulatedAnnealing:
                     z_top = s['z'] + s['h']
                     if z_top > z_land:
                         z_land = z_top
+            
             if z_land <= p['z'] and z_land + ph <= CH + 1e-9:
                 p['z'] = z_land
+                
+            if p['z'] < 1e-9:
+                settled.append(p)
+                continue
+                
+            base_area = pl * pw
+            support_area = 0.0
+            for s in settled:
+                if abs((s['z'] + s['h']) - p['z']) < 1e-6:
+                    ox = max(0.0, min(px + pl, s['x'] + s['l']) - max(px, s['x']))
+                    oy = max(0.0, min(py + pw, s['y'] + s['w']) - max(py, s['y']))
+                    support_area += ox * oy
+            
+            # In dict-based API, we just keep all boxes to avoid cascade
             settled.append(p)
+                
         return settled
 
     # ──────────────────────────────────────────────────────────────────────
@@ -256,6 +290,7 @@ class SimulatedAnnealing:
 
     _UNPLACED_PENALTY = 35.0
     _STABILITY_WEIGHT = 0.20
+    MIN_SUPPORT = 0.50
 
     @staticmethod
     def compute_fitness(placed, unplaced, container):
@@ -270,12 +305,15 @@ class SimulatedAnnealing:
         return u + (s * SimulatedAnnealing._STABILITY_WEIGHT) + placed_bonus - penalty
 
     @staticmethod
-    def _compute_fitness_inline(util, stability, n_unplaced):
+    def _compute_fitness_inline(util, stability, n_unplaced, penalty_vol=0.0):
         """Fast inline fitness from pre-computed metrics."""
         SA = SimulatedAnnealing
         penalty = 0.0
         if n_unplaced > 0:
             penalty = SA._UNPLACED_PENALTY * n_unplaced + (n_unplaced ** 1.5) * 5.0
+            
+        penalty += penalty_vol * 1.5
+        
         placed_bonus = 5.0 if n_unplaced == 0 else 0.0
         return util + (stability * SA._STABILITY_WEIGHT) + placed_bonus - penalty
 
@@ -315,8 +353,8 @@ class SimulatedAnnealing:
 
         def _try(chrom):
             nonlocal best_chrom, best_fit
-            _, unp, u, s = SA._decode_tuples(chrom, boxes, container, rot_cache)
-            f = SA._compute_fitness_inline(u, s, len(unp))
+            _, unp, u, s, r = SA._decode_tuples(chrom, boxes, container, rot_cache)
+            f = SA._compute_fitness_inline(u, s, len(unp), r)
             if f > best_fit:
                 best_fit = f
                 best_chrom = list(chrom)
@@ -404,9 +442,9 @@ class SimulatedAnnealing:
 
         # ── Initialise from best heuristic seed ───────────────────────
         current = SA.create_initial_chromosome(boxes, container, rot_cache)
-        cur_tuples, cur_unplaced, cur_util, cur_stab = SA._decode_tuples(
+        cur_tuples, cur_unplaced, cur_util, cur_stab, cur_rej = SA._decode_tuples(
             current, boxes, container, rot_cache)
-        cur_fit = SA._compute_fitness_inline(cur_util, cur_stab, len(cur_unplaced))
+        cur_fit = SA._compute_fitness_inline(cur_util, cur_stab, len(cur_unplaced), cur_rej)
 
         best       = list(current)
         best_fit   = cur_fit
@@ -433,15 +471,15 @@ class SimulatedAnnealing:
             for it in range(1, max_iterations + 1):
                 total_it += 1
 
-                # Time limit check every 200 iterations
-                if total_it % 200 == 0:
+                # Time limit check every 5 iterations for slow DBLF
+                if total_it % 5 == 0:
                     if time.perf_counter() - wall_start >= time_limit:
                         break
 
                 neighbour = SA.perturb(current)
-                n_tuples, n_unplaced, n_util, n_stab = SA._decode_tuples(
+                n_tuples, n_unplaced, n_util, n_stab, n_rej = SA._decode_tuples(
                     neighbour, boxes, container, rot_cache)
-                n_fit = SA._compute_fitness_inline(n_util, n_stab, len(n_unplaced))
+                n_fit = SA._compute_fitness_inline(n_util, n_stab, len(n_unplaced), n_rej)
 
                 # Inline acceptance check for speed
                 accept = False
@@ -494,9 +532,9 @@ class SimulatedAnnealing:
                     current = c
                 else:
                     current = SA.perturb(current)
-            _, cur_unp, cur_u, cur_s = SA._decode_tuples(
+            _, cur_unp, cur_u, cur_s, cur_r = SA._decode_tuples(
                 current, boxes, container, rot_cache)
-            cur_fit = SA._compute_fitness_inline(cur_u, cur_s, len(cur_unp))
+            cur_fit = SA._compute_fitness_inline(cur_u, cur_s, len(cur_unp), cur_r)
             temperature = T0 * max(0.4, 0.9 ** restart_count)
             stagnation = 0
 
